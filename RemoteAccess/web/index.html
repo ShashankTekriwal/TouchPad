@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+ 
+<html>
+    <head>
+        <title>Remote Access</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="initial-scale=0.9,width=device-width,user-scalable=no" />
+    </head>
+    <body style="overflow: hidden" >
+        <div>
+            <table>
+                <tr>
+                    <td>
+                        <input style="width: 300px" type="text" id="messageinput"/>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <table>
+                            <tr>
+                                <td>
+                                    <button onclick="openSocket()" style="width: 80px" >Open</button>
+                                </td>
+                                <td>
+                                    <button onclick="send()" style="width: 80px" >Send</button>
+                                </td>
+                                <td>
+                                    <button onclick="closeSocket()" style="width: 80px" >Close</button>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+                <tr>
+                    <td id="pad" style="height: 192px;width:300px;background: #4C4C4C" ></td>
+                    <td>
+                        <table>
+                            <tr>
+                                <td>
+                                    <button id="sup" style="height: 96px;">&#8593;</button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>
+                                    <button id="sdown" style="height:96px">&#8595;</button>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <table>
+                            <tr>
+                                <td>
+                                    <button id="lm" style = "width: 150px">Left Mouse</button>
+                                </td>
+                                <td>
+                                    <button id="rm" style = "width: 150px">Left Mouse</button>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </div>
+        <div id="scroll" ></div>
+        <div id="messages" style="display: block"></div>
+       
+        <!-- Script to utilise the WebSocket -->
+        <script type="text/javascript">
+                       
+            var webSocket;
+            var messages = document.getElementById("messages");
+            var url = "ws://"+location.host+"/RemoteAccess/WebSocks";
+           
+           
+            function openSocket(){
+                 //Ensures only one connection is open at a time
+                if(webSocket !== undefined && webSocket.readyState !== WebSocket.CLOSED){
+                   writeResponse("Connection already opened.");
+                    return;
+                }
+                // Create a new instance of the websocket
+                //webSocket = new WebSocket("ws://192.168.1.195:8080/RemoteAccess/WebSocks");
+                webSocket = new WebSocket(url);
+                 
+                /**
+                 * Binds functions to the listeners for the websocket.
+                 */
+                webSocket.onopen = function(event){
+                    // For reasons I can't determine, onopen gets called twice
+                    // and the first time event.data is undefined.
+                    // Leave a comment if you know the answer.
+                    if(event.data === undefined)
+                        return;
+ 
+                    writeResponse(event.data);
+                };
+ 
+                webSocket.onmessage = function(event){
+                    writeResponse(event.data);
+                };
+ 
+                webSocket.onclose = function(event){
+                    writeResponse("Connection closed!");
+                };
+            }
+           
+            /**
+             * Sends the value of the text input to the server
+             */
+            function send(){
+                if(webSocket===undefined || webSocket.readyState === WebSocket.CLOSED){
+                    writeResponse("Cannot Send. Websocket Closed!");
+                }else{
+                    var text = document.getElementById("messageinput").value;
+                    webSocket.send(text);
+                    document.getElementById("scroll").innerHTML = "Message Sent!";
+                }
+            }
+           
+            function closeSocket(){
+                if(webSocket===undefined || webSocket.readyState === WebSocket.CLOSED){
+                    writeResponse("Connection Already Closed!");
+                }else{
+                    webSocket.close();
+                }
+                document.getElementById("scroll").innerHTML="";
+            }
+ 
+            function writeResponse(text){
+                messages.innerHTML = text;
+            }
+            //------------------------------------code---------------------------
+            var delimiter = "*";
+            var mouseState = "up";
+            var scrollDown_text = "Mh";
+            var scrollUp_text = "Mg";
+            var mouseMove_text = "Mm";
+            var mouseClick_text = "Me";
+            var mouseRightClick_text = "Mf";
+            var scrollIntervalId;
+            var leftMouseDown_text = "Ma";
+            var leftMouseUp_text = "Mb";
+            var pad = document.getElementById("pad");
+            var gInterval;
+            
+            var screenHeight = screen.height/4;
+            var screenWidth = screen.width/4;
+            
+            var startX = 0;
+            var startY = 0;
+            var flag = 0;
+            var scroll_end = 1;
+            var rest = 0;
+            
+            window.addEventListener('touchmove',function(e){
+                e.preventDefault();
+            },false);
+            pad.addEventListener('touchstart',function(ts){
+                scroll_end=1;
+                document.getElementById("scroll").innerHTML = "";
+                //flag=0;
+                if(ts.targetTouches.length === 1){
+                    var touchobj = ts.changedTouches[0];
+                    //console.log(touchobj);
+                    flag = 1;
+                    startX = touchobj.clientX;
+                    startY = touchobj.clientY;
+                } else if ( ts.targetTouches.length === 2) {
+                    flag = 2;
+                }
+                
+            },false);
+            pad.addEventListener('touchmove',function(e){
+                if(flag === 1){
+                    var touchobj = e.changedTouches[0];
+                    var distX = touchobj.clientX - startX;
+                    var distY = touchobj.clientY - startY;
+                    startX = touchobj.clientX;
+                    startY = touchobj.clientY;
+                    document.getElementById("scroll").innerHTML = "("+distX+","+distY+")";
+                    sendText(mouseMove_text+distX+delimiter+distY);
+                } else if (flag === 2) {
+                    setTimeout(function(){
+                        //scrollmebabypoop
+                        if(flag===2){
+                            //document.getElementById("scroll").innerHTML = "ScrollNow"+rest;
+                            var touchobj = e.changedTouches[0];
+                            if(touchobj.clientY-startY<0){
+                                document.getElementById("scroll").innerHTML = "Scrolling Up!";
+                                sendText(scrollUp_text);
+                            } else if (touchobj.clientY-startY>0){
+                                document.getElementById("scroll").innerHTML = "Scrolling Down!";
+                                sendText(scrollDown_text);
+                            }
+                            startY = touchobj.clientY;
+                            startX = touchobj.clientX;
+                            scroll_end = 2;
+                            rest++;
+                        }
+                    },200);
+                }
+                
+            },false);
+            pad.addEventListener('click',function(){
+                sendText(mouseClick_text);
+                document.getElementById("scroll").innerHTML = "Click";
+                flag = 3;
+            },false);
+            pad.addEventListener('touchend',function(){
+                if(flag===2 && scroll_end !== 2){
+                    sendText(mouseRightClick_text);
+                    document.getElementById("scroll").innerHTML = "RightClick";
+                    flag = 3;
+                }else if(scroll_end === 2){
+                    //scrollOver
+                    document.getElementById("scroll").innerHTML = "";
+                }
+                document.getElementById("scroll").innerHTML = "";
+            },false);
+            
+            document.getElementById('lm').addEventListener('touchstart',function(){
+                //console.log("mouseDown");
+                //document.getElementById("touch3").innerHTML="down";
+                sendText(leftMouseDown_text);
+            },false);
+            document.getElementById('lm').addEventListener('touchend',function(){
+                //console.log("mouseUp");
+                //document.getElementById("touch3").innerHTML = "up";
+                sendText(leftMouseUp_text);
+            },false);
+            document.getElementById('rm').addEventListener('click',function(){
+                //console.log("right mouse click");
+                sendText(mouseRightClick_text);
+            },false);
+            
+            function req(){
+                document.getElementById("pad").style.height = "192px";
+                document.getElementById("pad").style.width = "342px";
+            }
+            document.onmouseup = function(){
+                mouseState = "up";
+                clearInterval(scrollIntervalId);
+            };
+            function sendText(message){
+                webSocket.send(message);
+            }
+            function scroll(type){
+                mouseState = "down";
+                scrollIntervalId = setInterval(function(){
+                    if(mouseState === "down" && type === "down"){
+                        sendText(scrollDown_text);
+                    }else if (mouseState === "down" && type === "up") {
+                        sendText(scrollUp_text);
+                    }
+                },100);
+            }
+            var scrollInterval;
+            document.getElementById("sup").addEventListener('touchstart',function(){
+                scrollInterval = setInterval(function(){
+                    sendText(scrollUp_text);
+                },25);
+            },false);
+            document.getElementById("sup").addEventListener('touchend',function(){
+                clearInterval(scrollInterval);
+            },false);
+            document.getElementById("sdown").addEventListener('touchstart',function(){
+                scrollInterval = setInterval(function(){
+                    sendText(scrollDown_text);
+                },25);
+            },false);
+            document.getElementById("sdown").addEventListener('touchend',function(){
+                clearInterval(scrollInterval);
+            },false);
+        </script> 
+    </body>
+</html>
